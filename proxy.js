@@ -1,6 +1,50 @@
+"use strict";
+var nodent = require('nodent')();
 var http = require('http');
 var urlLib = require('url');
 
+
+class HttpResponse {
+	constructor(response){
+		var self = this;
+		this.response = response;
+		this._readable = null;
+		this._end = false;
+		this.response.on('end', function(){
+			self._end = true;
+		});
+		this.response.on('readable', function(){
+			if(self._readable){
+				self._readable();
+			}
+		});
+	}
+
+	async read(){
+		if(this._end){
+			return null;
+		}
+		var chunk = this.response.read();
+		if(chunk){
+			return chunk;
+		}
+		var self = this;
+		self._readable = function(){
+			self._readable = null;
+			async return self.response.read();
+		}
+	}
+}
+
+async function request(options){
+	var req = http.request(options, function(res){
+		async return new HttpResponse(res);
+	});
+	req.on('error', function(err){
+		async throw err;
+	});
+	req.end();
+}
 
 function handleRequest(request, response){
     var parsedUrl = urlLib.parse(request.url);
@@ -28,4 +72,24 @@ function handleRequest(request, response){
 
 }
 
-http.createServer(handleRequest).listen(8080);
+//http.createServer(handleRequest).listen(8080);
+
+
+var options = {
+	hostname: 'qqqq.lenta.ru',
+	port: 80,
+	path: '/',
+	method: 'GET'
+};
+
+try{
+	var resp = await request(options);
+	var chunk;
+	while(null != (chunk = await resp.read()))
+	{
+		console.log('.');
+	}
+}
+catch(err){
+	console.error('request error:', err);
+}

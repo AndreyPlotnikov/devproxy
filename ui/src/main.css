@@ -1,0 +1,11 @@
+body {
+    background-color: #fff;
+}
+
+.log-box {
+    width: 100%;
+    min-height: 300px;
+    border: 1px solid gray;
+    border-radius: 6px;
+    padding: 5px;
+}
