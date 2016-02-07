@@ -1,95 +1,91 @@
-"use strict";
-var nodent = require('nodent')();
+'use strict';
+var stream = require('stream');
 var http = require('http');
 var urlLib = require('url');
+var _ = require('lodash');
+var Promise = require('bluebird');
 
+class StringIO extends stream.Readable {
+  constructor(value) {
+    super();
+    this._value = value;
+  }
 
-class HttpResponse {
-	constructor(response){
-		var self = this;
-		this.response = response;
-		this._readable = null;
-		this._end = false;
-		this.response.on('end', function(){
-			self._end = true;
-		});
-		this.response.on('readable', function(){
-			if(self._readable){
-				self._readable();
-			}
-		});
-	}
-
-	async read(){
-		if(this._end){
-			return null;
-		}
-		var chunk = this.response.read();
-		if(chunk){
-			return chunk;
-		}
-		var self = this;
-		self._readable = function(){
-			self._readable = null;
-			async return self.response.read();
-		}
-	}
+  _read() {
+    this.push(this._value);
+    this.push(null);
+  }
 }
 
-async function request(options){
-	var req = http.request(options, function(res){
-		async return new HttpResponse(res);
-	});
-	req.on('error', function(err){
-		async throw err;
-	});
-	req.end();
+class ProxyRequest {
+  constructor(request) {
+    this.headers = _.cloneDeep(request.headers);
+    this.method = request.method;
+    this.url = request.url;
+    this.body = request;
+  }
 }
 
-function handleRequest(request, response){
-    var parsedUrl = urlLib.parse(request.url);
-    var options = {
-        hostname: 'lenta.ru',
-        port: 80,
-        path: parsedUrl.href,
-        method: request.method
-    };
-    console.log(options);
-    var req = http.request(options, function(res){
-        console.log('response:', res.statusCode);
-        response.writeHead(res.statusCode, res.headers);
-        res.on('data', function(chunk){
-            response.write(chunk);
+class ProxyResponse {
+  constructor() {
+    this.statusCode = 200;
+    this.headers = {};
+    this.setBodyAsString('');
+  }
+
+  setBodyAsString(body) {
+    this.body = new StringIO(body);
+  }
+}
+
+class RequestContext {
+  constructor(request) {
+    this.request = new ProxyRequest(request);
+    this.response = new ProxyResponse();
+  }
+}
+
+function getPipeline(request) {
+  return {
+    execute: (context) => {
+      return new Promise((resolve, reject) => {
+        let request = context.request;
+        let parsedUrl = urlLib.parse(request.url);
+        let options = {
+          hostname: 'lenta.ru',
+          port: 80,
+          path: parsedUrl.href,
+          method: request.method,
+        };
+        var req = http.request(options, (res) => {
+          context.response.statusCode = res.statusCode;
+          context.response.headers = res.headers;
+          context.response.body = res;
+          //context.response.setBodyAsString('Hello');
+          console.log('status code:', res.statusCode);
+          console.log('headers:', res.headers);
+          resolve(context);
         });
-        res.on('end', function(){
-            response.end();
+
+        req.on('error', function (err) {
+          console.log('error:', err);
+          reject(err);
         });
-    });
-    req.on('error', function(err){
-        console.log('error:', err);
-    });
-    req.end();
 
+        req.end();
+      });
+    },
+  };
 }
 
-//http.createServer(handleRequest).listen(8080);
-
-
-var options = {
-	hostname: 'qqqq.lenta.ru',
-	port: 80,
-	path: '/',
-	method: 'GET'
-};
-
-try{
-	var resp = await request(options);
-	var chunk;
-	while(null != (chunk = await resp.read()))
-	{
-		console.log('.');
-	}
+function handleRequest(request, response) {
+  let context = new RequestContext(request);
+  let pipeline = getPipeline(request);
+  pipeline.execute(context).then((context) => {
+    let proxyRsp = context.response;
+    response.writeHead(proxyRsp.statusCode, proxyRsp.headers);
+    proxyRsp.body.pipe(response);
+  });
 }
-catch(err){
-	console.error('request error:', err);
-}
+
+http.createServer(handleRequest).listen(8080);

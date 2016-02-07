@@ -1,0 +1,26 @@
+{
+  "name": "devproxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "proxy.js",
+  "dependencies": {
+    "bluebird": "^3.2.2",
+    "lodash": "^4.2.1",
+    "nodemon": "^1.8.1",
+    "nodent": "^2.2.9"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AndreyPlotnikov/devproxy.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AndreyPlotnikov/devproxy/issues"
+  },
+  "homepage": "https://github.com/AndreyPlotnikov/devproxy#readme"
+}
